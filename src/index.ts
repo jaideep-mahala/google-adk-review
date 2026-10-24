@@ -6,20 +6,20 @@ import {
   getFunctionResponses,
   isFinalResponse,
 } from '@google/adk';
-import { rootAgent, getCurrentTime } from './agent.js';
+import { rootAgent, cloneRepository } from './agent.js';
 
 async function main() {
   console.log('====================================================');
-  console.log('🤖 Google ADK Agent Environment: Hello Time Agent');
+  console.log('🛠️  Google ADK Autonomous Coding & PR Agent');
   console.log('====================================================\n');
 
-  // 1. Direct tool test (Unit test verification)
-  console.log('👉 [1/2] Testing Mock Tool directly:');
-  try {
-    const directToolResult = await (getCurrentTime as any).execute({ city: 'Tokyo' });
-    console.log('Tool execution result:', directToolResult);
-  } catch (err) {
-    console.error('Tool execution error:', err);
+  // 1. Tool availability test
+  console.log('👉 [1/2] Verifying Core Tools:');
+  console.log(`- Loaded Agent: ${rootAgent.name}`);
+  console.log(`- Model: ${rootAgent.model}`);
+  console.log(`- Available Tools (${(rootAgent as any).tools?.length ?? 0}):`);
+  for (const tool of (rootAgent as any).tools || []) {
+    console.log(`  • ${tool.name}: ${tool.description?.slice(0, 75)}...`);
   }
 
   // 2. Checking API key configuration
@@ -30,7 +30,6 @@ async function main() {
     console.log('  1. Open .env');
     console.log('  2. Set GEMINI_API_KEY=your_actual_gemini_api_key');
     console.log('  3. Run `npm start` again\n');
-    console.log('Environment setup and mock tool execution succeeded!');
     return;
   }
 
@@ -39,15 +38,20 @@ async function main() {
     process.env.GOOGLE_GENAI_API_KEY = process.env.GEMINI_API_KEY;
   }
 
+  // Check GITHUB_TOKEN status
+  if (!process.env.GITHUB_TOKEN) {
+    console.log('\n💡 Tip: Set GITHUB_TOKEN in .env to enable direct GitHub PR creation & authenticated cloning.');
+  }
+
   // 3. Running Agent with InMemoryRunner
   console.log('\n👉 [2/2] Running Agent with InMemoryRunner:');
   const runner = new InMemoryRunner({
     agent: rootAgent,
-    appName: 'hello_time_app',
+    appName: 'coding_agent_app',
   });
 
-  const userId = 'test_user';
-  const sessionId = 'test_session_001';
+  const userId = 'developer_user';
+  const sessionId = `dev_session_${Date.now()}`;
 
   // Initialize session
   await runner.sessionService.createSession({
@@ -56,8 +60,11 @@ async function main() {
     sessionId,
   });
 
-  const promptText = 'What is the current time in Paris?';
-  console.log(`Prompt: "${promptText}"\n`);
+  // Allow custom prompt from terminal arguments: `npm start "clone https://github.com/..."`
+  const cliPrompt = process.argv.slice(2).join(' ').trim();
+  const promptText = cliPrompt || 'List the capabilities you have for cloning, inspecting code, and creating pull requests.';
+
+  console.log(`User Prompt: "${promptText}"\n`);
 
   try {
     const eventStream = runner.runAsync({
@@ -74,7 +81,7 @@ async function main() {
       const calls = getFunctionCalls(event);
       if (calls && calls.length > 0) {
         for (const call of calls) {
-          console.log(`🔧 Tool Call: ${call.name}(${JSON.stringify(call.args)})`);
+          console.log(`🔧 Tool Call: ${call.name}(${JSON.stringify(call.args, null, 2)})`);
         }
       }
 
@@ -82,7 +89,7 @@ async function main() {
       const responses = getFunctionResponses(event);
       if (responses && responses.length > 0) {
         for (const resp of responses) {
-          console.log(`📦 Tool Response for ${resp.name}:`, resp.response);
+          console.log(`📦 Tool Response for ${resp.name}:`, JSON.stringify(resp.response, null, 2));
         }
       }
 
@@ -97,16 +104,9 @@ async function main() {
       }
     }
 
-    console.log('\n🎉 Agent test run completed successfully!');
+    console.log('\n🎉 Agent run finished successfully!');
   } catch (error: any) {
     console.error('\n❌ Error running agent:', error.message || error);
-    if (
-      error.message?.includes('API_KEY_INVALID') ||
-      error.message?.includes('403') ||
-      error.message?.includes('401')
-    ) {
-      console.log('Please verify that your Gemini API key in .env is valid.');
-    }
   }
 }
 

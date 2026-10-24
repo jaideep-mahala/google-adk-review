@@ -1,6 +1,26 @@
-# Google ADK TypeScript Agent Environment
+# Autonomous Software Engineering & PR Agent (Google ADK)
 
-This project is a complete TypeScript setup for building and testing AI agents with Google's **Agent Development Kit (`@google/adk`)**.
+A full-featured TypeScript agent built with Google's **Agent Development Kit (`@google/adk`)** that autonomously clones Git repositories, analyzes source code, reproduces errors, edits files, executes tests, and opens GitHub Pull Requests.
+
+---
+
+## 🚀 Key Capabilities
+
+- **Git & Repository Operations**:
+  - `clone_repository`: Clones remote Git repositories into a local, isolated `workspaces/` folder with token authentication.
+  - `git_create_branch`: Spawns clean feature or fix branches.
+  - `git_status` & `git_diff`: Audits local modifications and inspects exact diffs.
+  - `git_commit`: Stages files and creates commits with conventional commit messages.
+  - `git_push`: Pushes changes to the remote origin.
+- **Code Inspection & Editing**:
+  - `list_files`: Recursively traverses directory structures while ignoring noise (`node_modules`, `.git`, etc.).
+  - `search_code`: Performs regex and substring searches across codebases.
+  - `read_file`: Reads files with line numbering and range support.
+  - `write_file`: Modifies existing code or creates new source files.
+- **Test & Build Execution**:
+  - `run_command`: Executes any test suite (`npm test`, `pytest`, `cargo test`), type check, or build script inside the repository workspace.
+- **GitHub PR Automation**:
+  - `create_pull_request`: Automatically creates Pull Requests via the GitHub REST API (`GITHUB_TOKEN`) or falls back to local GitHub CLI (`gh`).
 
 ---
 
@@ -9,85 +29,60 @@ This project is a complete TypeScript setup for building and testing AI agents w
 ```
 ai-review/
 ├── src/
-│   ├── agent.ts          # Agent definition & mock tools (FunctionTool, LlmAgent)
-│   └── index.ts          # Agent runner script with InMemoryRunner & session handling
-├── dist/                 # Compiled JavaScript output (generated on build)
-├── .env                  # Local environment file (API keys)
-├── .env.example          # Environment variables template
-├── .gitignore            # Git ignore rules for node_modules, dist, and .env
-├── package.json          # Dependencies & scripts
-├── tsconfig.json         # TypeScript compiler configuration (NodeNext / ESM)
-└── README.md             # Documentation
+│   ├── agent.ts                  # Autonomous Coding Agent definition & tools registration
+│   ├── index.ts                  # CLI runner with InMemoryRunner
+│   └── tools/
+│       ├── workspace_utils.ts    # Workspace path security & URL parsing
+│       ├── git_tools.ts          # Clone, branch, commit, diff, push tools
+│       ├── file_tools.ts         # List, read, write, search tools
+│       ├── command_tools.ts      # Terminal & test runner execution tool
+│       └── github_tools.ts       # GitHub Pull Request creation tool
+├── workspaces/                   # Local storage for cloned repositories (.gitignored)
+├── .env                          # Local credentials (Gemini API key, GitHub token)
+├── .env.example                  # Template for environment variables
+├── package.json                  # Dependencies & scripts
+└── tsconfig.json                 # TypeScript compiler configuration
 ```
 
 ---
 
-## 🛠️ Requirements & Setup
+## 🔑 Environment Configuration
 
-- **Node.js**: `v20.19.0` or newer (Installed: `v24.22.1`)
-- **Package Manager**: `npm` (Installed: `v11.19.1`)
+Edit `.env` in the root directory:
 
-All required dependencies are installed:
-- `@google/adk`: Google Agent Development Kit for TypeScript
-- `zod`: Schema definition and validation for tools
-- `dotenv`: Environment variable loader
-- `typescript`, `tsx`, `@types/node`: Fast TypeScript execution and compilation
+```env
+# Gemini API Key (from https://aistudio.google.com/app/apikey)
+GEMINI_API_KEY=your_gemini_api_key
+GOOGLE_GENAI_API_KEY=your_gemini_api_key
 
----
-
-## 🔑 Configure API Key
-
-1. Get your Gemini API key from [Google AI Studio](https://aistudio.google.com/app/apikey).
-2. Open the `.env` file in the root directory:
-   ```env
-   GEMINI_API_KEY=your_actual_gemini_api_key_here
-   ```
-
-*(Note: Both `GEMINI_API_KEY` and `GOOGLE_GENAI_API_KEY` are supported).*
-
----
-
-## 🚀 Available Commands
-
-| Command | Description |
-|---|---|
-| `npm start` | Runs the agent test runner immediately using `tsx` |
-| `npm run dev` | Runs the agent in watch mode (auto-reloads on file changes) |
-| `npm run type-check` | Runs the TypeScript compiler check without emitting files (`tsc --noEmit`) |
-| `npm run build` | Compiles TypeScript files into the `./dist` folder |
-
----
-
-## 📝 Code Explanation
-
-### 1. `src/agent.ts`
-Defines the `FunctionTool` (`get_current_time`) and `LlmAgent` (`hello_time_agent`):
-
-```typescript
-import { FunctionTool, LlmAgent } from '@google/adk';
-import { z } from 'zod';
-
-/* Mock tool implementation */
-export const getCurrentTime = new FunctionTool({
-  name: 'get_current_time',
-  description: 'Returns the current time in a specified city.',
-  parameters: z.object({
-    city: z.string().describe("The name of the city for which to retrieve the current time."),
-  }),
-  execute: ({ city }) => {
-    return { status: 'success', report: `The current time in ${city} is 10:30 AM` };
-  },
-});
-
-export const rootAgent = new LlmAgent({
-  name: 'hello_time_agent',
-  model: 'gemini-flash-latest',
-  description: 'Tells the current time in a specified city.',
-  instruction: `You are a helpful assistant that tells the current time in a city.
-                Use the 'get_current_time' tool for this purpose.`,
-  tools: [getCurrentTime],
-});
+# GitHub Personal Access Token (with 'repo' scope)
+# Used to clone private repos, push branches, and create PRs
+GITHUB_TOKEN=your_github_token
 ```
 
-### 2. `src/index.ts`
-Sets up an `InMemoryRunner`, provisions a session with `sessionService.createSession`, and streams events using `runner.runAsync(...)`. It logs tool calls, tool outputs, and LLM responses in real-time.
+---
+
+## 🛠️ How to Run
+
+### 1. Web UI Mode (`ADK DevTools`)
+Start the interactive Web UI:
+```bash
+npx adk web --reload_agents true
+```
+Open **`http://localhost:8000/dev-ui`** in your browser. You can give the agent natural language tasks such as:
+> *"Clone https://github.com/my-org/my-repo, run the tests, fix any failing assertions in src/auth.ts, commit, and create a PR targeting main."*
+
+### 2. Terminal CLI Mode
+Run the agent directly from the command line:
+```bash
+# Run with default capabilities prompt:
+npm start
+
+# Or provide a custom prompt directly:
+npm start "Clone https://github.com/owner/repo.git and inspect package.json"
+```
+
+### 3. Type Checking
+```bash
+npm run type-check
+```
